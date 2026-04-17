@@ -53,11 +53,11 @@ class CertificateClassifier:
         self.classify_entry.grid(row=0, column=1, sticky=tk.W, pady=10, padx=10)
         self.classify_entry.insert(0, "按姓名分类")
 
-        self.hint_label = ttk.Label(self.classify_frame, text="提示: 支持关键词如 姓名、奖项级别(省级/市级/镇级)、年份、奖项类型、颁发机构 等，可混合使用", 
+        self.hint_label = ttk.Label(self.classify_frame, text="提示: 支持模糊输入，如'姓名'、'名字'、'名'、'按姓'等都能识别为姓名分类", 
                                     foreground="gray", font=("微软雅黑", 9))
         self.hint_label.grid(row=1, column=0, columnspan=3, sticky=tk.W, pady=5)
 
-        self.examples_label = ttk.Label(self.classify_frame, text="示例: '姓名'、'省级'、'按姓名和省级分类'、'姓名/奖项类型'", 
+        self.examples_label = ttk.Label(self.classify_frame, text="示例: '谁获奖'、'几年'、'按名'、'加奖'、'姓+年'、'名和级'、'人或时间'", 
                                         foreground="gray", font=("微软雅黑", 9))
         self.examples_label.grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=5)
 
@@ -90,25 +90,83 @@ class CertificateClassifier:
             self.dest_entry.insert(0, folder)
 
     def parse_classify_condition(self, user_input):
-        """智能解析用户输入的分类条件"""
+        """智能解析用户输入的分类条件，支持模糊匹配"""
         user_input = user_input.lower().strip()
 
-        keywords_map = {
-            '姓名': ['姓名', '名字', 'name', '姓名分类', '按姓名'],
-            '年份': ['年份', '年', 'year', '年度', '按年份'],
-            '奖项类型': ['奖项', '奖项类型', 'type', '奖种', '奖项分类', '按奖项'],
-            '颁发机构': ['机构', '颁发机构', 'organization', '发证机构', '颁奖机构', '按机构'],
-            '奖项级别': ['省级', '市级', '镇级', '县级', '区级', '国家级', '省级奖', '市级奖', '镇级奖', '县级奖', '区级奖'],
+        # 同义词和变体词库
+        synonyms_map = {
+            '姓名': ['姓名', '名字', '名', '人名', '用户名', '获奖人', '参赛者', '选手', 'who', 'person', 'name', 'nm'],
+            '年份': ['年份', '年', '年度', '时间', '什么时候', '哪年', '何时', 'year', 'yr', 'date', 'time', 'y'],
+            '奖项类型': ['奖项', '奖', '奖种', '奖类型', '奖项类型', '几等奖', '奖项名', 'type', 'kind', 'award', 'prize'],
+            '颁发机构': ['机构', '单位', '发证', '颁奖', '主办', '颁发', '组织', 'organization', 'org', 'issuer', 'issuer'],
+            '奖项级别': ['省级', '市级', '县级', '镇级', '区级', '国家级', '省', '市', '县', '镇', '区', '国家', '级别', 'level', 'grade', 'rank'],
         }
 
+        # 连接词和分隔符
+        separators = ['和', '与', '加', '跟', '及', '/', '、', ',', '+', '&', '或', '或者']
+
+        # 将输入按分隔符拆分
+        words = [user_input]
+        for sep in separators:
+            new_words = []
+            for word in words:
+                new_words.extend(word.split(sep))
+            words = new_words
+
+        # 对每个词进行模糊匹配
         matched_conditions = []
+        for word in words:
+            word = word.strip()
+            if not word:
+                continue
 
-        for condition, keywords in keywords_map.items():
-            for keyword in keywords:
-                if keyword in user_input:
-                    matched_conditions.append(condition)
+            # 先精确匹配
+            for condition, keywords in synonyms_map.items():
+                if word in keywords:
+                    if condition not in matched_conditions:
+                        matched_conditions.append(condition)
                     break
+            else:
+                # 模糊匹配 - 检查词是否包含关键词或关键词包含该词
+                for condition, keywords in synonyms_map.items():
+                    matched = False
+                    for keyword in keywords:
+                        if keyword in word or word in keyword:
+                            if condition not in matched_conditions:
+                                matched_conditions.append(condition)
+                            matched = True
+                            break
+                    if matched:
+                        break
 
+        # 如果仍然没有匹配，尝试理解意图
+        if not matched_conditions:
+            intent_patterns = {
+                '姓名': ['谁', '何人', '哪个人', '哪个人的'],
+                '年份': ['什么时候', '何时', '什么时间', '什么年'],
+                '奖项类型': ['什么奖', '哪个奖', '奖是什么'],
+                '颁发机构': ['谁发的', '哪个单位', '哪里的'],
+                '奖项级别': ['什么级别', '多大的', '什么层次'],
+            }
+
+            for condition, patterns in intent_patterns.items():
+                for pattern in patterns:
+                    if pattern in user_input:
+                        matched_conditions.append(condition)
+                        break
+
+        # 再次尝试单字符匹配（提高容错性）
+        if not matched_conditions:
+            if '名' in user_input:
+                matched_conditions.append('姓名')
+            if '年' in user_input:
+                matched_conditions.append('年份')
+            if '奖' in user_input:
+                matched_conditions.append('奖项类型')
+            if '级' in user_input:
+                matched_conditions.append('奖项级别')
+
+        # 默认按姓名分类
         if not matched_conditions:
             matched_conditions = ['姓名']
 
