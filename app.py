@@ -53,11 +53,11 @@ class CertificateClassifier:
         self.classify_entry.grid(row=0, column=1, sticky=tk.W, pady=10, padx=10)
         self.classify_entry.insert(0, "按姓名分类")
 
-        self.hint_label = ttk.Label(self.classify_frame, text="提示: 支持关键词如 姓名、姓名/年份、奖项类型、颁发机构、年份 等，可混合使用", 
+        self.hint_label = ttk.Label(self.classify_frame, text="提示: 支持关键词如 姓名、奖项级别(省级/市级/镇级)、年份、奖项类型、颁发机构 等，可混合使用", 
                                     foreground="gray", font=("微软雅黑", 9))
         self.hint_label.grid(row=1, column=0, columnspan=3, sticky=tk.W, pady=5)
 
-        self.examples_label = ttk.Label(self.classify_frame, text="示例: '姓名'、'年份'、'按姓名和年份分类'、'姓名/奖项'", 
+        self.examples_label = ttk.Label(self.classify_frame, text="示例: '姓名'、'省级'、'按姓名和省级分类'、'姓名/奖项类型'", 
                                         foreground="gray", font=("微软雅黑", 9))
         self.examples_label.grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=5)
 
@@ -98,6 +98,7 @@ class CertificateClassifier:
             '年份': ['年份', '年', 'year', '年度', '按年份'],
             '奖项类型': ['奖项', '奖项类型', 'type', '奖种', '奖项分类', '按奖项'],
             '颁发机构': ['机构', '颁发机构', 'organization', '发证机构', '颁奖机构', '按机构'],
+            '奖项级别': ['省级', '市级', '镇级', '县级', '区级', '国家级', '省级奖', '市级奖', '镇级奖', '县级奖', '区级奖'],
         }
 
         matched_conditions = []
@@ -132,7 +133,8 @@ class CertificateClassifier:
             "姓名": "未知",
             "奖项类型": "未知",
             "年份": "未知",
-            "颁发机构": "未知"
+            "颁发机构": "未知",
+            "奖项级别": "未知"
         }
 
         name_match = re.search(r"姓名[:：]?\s*([\u4e00-\u9fa5]{2,4})", text)
@@ -171,6 +173,37 @@ class CertificateClassifier:
             if match:
                 info["颁发机构"] = match.group(1)
                 break
+
+        level_patterns = [
+            r"([\u4e00-\u9fa5]+)省(级)?(大赛|竞赛|评选|比赛|奖)",
+            r"([\u4e00-\u9fa5]+)市(级)?(大赛|竞赛|评选|比赛|奖)",
+            r"([\u4e00-\u9fa5]+)县(级)?(大赛|竞赛|评选|比赛|奖)",
+            r"([\u4e00-\u9fa5]+)镇(级)?(大赛|竞赛|评选|比赛|奖)",
+            r"([\u4e00-\u9fa5]+)区(级)?(大赛|竞赛|评选|比赛|奖)",
+            r"(国家级|省级|市级|县级|镇级|区级)(大赛|竞赛|评选|比赛|奖)",
+        ]
+        
+        for pattern in level_patterns:
+            match = re.search(pattern, text)
+            if match:
+                for group in match.groups():
+                    if group and group.strip() in ['国家级', '省级', '市级', '县级', '镇级', '区级']:
+                        info["奖项级别"] = group.strip()
+                        break
+                if info["奖项级别"] != "未知":
+                    break
+        
+        if info["奖项级别"] == "未知":
+            if "省" in text and ("大赛" in text or "竞赛" in text or "评选" in text):
+                info["奖项级别"] = "省级"
+            elif "市" in text and ("大赛" in text or "竞赛" in text or "评选" in text):
+                info["奖项级别"] = "市级"
+            elif "县" in text and ("大赛" in text or "竞赛" in text or "评选" in text):
+                info["奖项级别"] = "县级"
+            elif "镇" in text and ("大赛" in text or "竞赛" in text or "评选" in text):
+                info["奖项级别"] = "镇级"
+            elif "区" in text and ("大赛" in text or "竞赛" in text or "评选" in text):
+                info["奖项级别"] = "区级"
 
         return info
 
