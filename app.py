@@ -5,6 +5,9 @@ from tkinter import filedialog, messagebox, ttk
 import fitz
 import re
 import json
+from PIL import Image
+import pytesseract
+import cv2
 
 class CertificateClassifier:
     def __init__(self, root):
@@ -185,6 +188,34 @@ class CertificateClassifier:
             messagebox.showerror("错误", f"提取PDF文本失败: {str(e)}")
             return ""
 
+    def extract_text_from_image(self, image_path):
+        """从图片中提取文本"""
+        try:
+            # 读取图片
+            img = cv2.imread(image_path)
+            
+            # 转换为灰度图
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            
+            # 二值化处理
+            _, thresh = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
+            
+            # 保存处理后的图片
+            temp_image = "temp_image.png"
+            cv2.imwrite(temp_image, thresh)
+            
+            # 使用pytesseract提取文本
+            text = pytesseract.image_to_string(Image.open(temp_image), lang='chi_sim')
+            
+            # 清理临时文件
+            if os.path.exists(temp_image):
+                os.remove(temp_image)
+            
+            return text
+        except Exception as e:
+            messagebox.showerror("错误", f"提取图片文本失败: {str(e)}")
+            return ""
+
     def extract_info(self, text):
         """从文本中提取信息"""
         info = {
@@ -309,18 +340,28 @@ class CertificateClassifier:
         self.root.update()
 
         try:
-            pdf_files = [f for f in os.listdir(source_folder) if f.lower().endswith('.pdf')]
+            # 支持的文件格式
+            supported_extensions = ['.pdf', '.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif']
+            pdf_files = [f for f in os.listdir(source_folder) if any(f.lower().endswith(ext) for ext in supported_extensions)]
             total_files = len(pdf_files)
 
             if total_files == 0:
-                messagebox.showinfo("提示", "源文件夹中没有PDF文件")
+                messagebox.showinfo("提示", "源文件夹中没有支持的文件")
                 self.status_var.set("就绪")
                 return
 
             processed_files = 0
             for pdf_file in pdf_files:
                 pdf_path = os.path.join(source_folder, pdf_file)
-                text = self.extract_text_from_pdf(pdf_path)
+                
+                # 根据文件类型提取文本
+                ext = os.path.splitext(pdf_file)[1].lower()
+                if ext == '.pdf':
+                    text = self.extract_text_from_pdf(pdf_path)
+                else:
+                    # 图片文件
+                    text = self.extract_text_from_image(pdf_path)
+                
                 info = self.extract_info(text)
 
                 folder_name = self.generate_folder_name(info, conditions)
