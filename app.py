@@ -9,8 +9,6 @@ from PIL import Image, ImageTk
 import pytesseract
 import cv2
 
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-
 class ModernUI:
     def __init__(self, parent):
         self.parent = parent
